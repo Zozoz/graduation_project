@@ -2,8 +2,8 @@
 # encoding: utf-8
 
 
-import sys
 import redis
+from optparse import OptionParser
 
 def loadDataSet():
     simpDat = [['r', 'z', 'h', 'j', 'p'],
@@ -54,6 +54,8 @@ def getPoj(filename):
             print cnt
             line = line.split(' ')[1:]
             line[-1] = line[-1].strip('\n')
+            line = set(line) - set(['1000', '1004', '1003', '1005', '1007', '1006', '1163', '1088', '1002', '1050'])
+            line = list(line)
             dataItemSet.append(line)
     return dataItemSet
 
@@ -83,7 +85,7 @@ def scanD(dataSet, Ck, minSupport):
     retList = []
     supportData = {}
     for item in sumsup:
-        support = sumsup[item]/numItems
+        support = sumsup[item] / numItems
         if support >= minSupport:
             retList.insert(0, item)
         supportData[item] = support
@@ -98,14 +100,14 @@ def aprioriGen(Lk, k):
         for j in range(i+1, lenLk):
             L1 = list(Lk[i])[:k-2]
             L2 = list(Lk[j])[:k-2]
-            # L1.sort()
-            # L2.sort()
+            L1.sort()
+            L2.sort()
             if L1 == L2:
                 retList.append(Lk[i] | Lk[j]) # merge Lk[i] and Lk[j]
     return retList
 
 
-def apriori(dataSet, minSupport = 0.5):
+def apriori(dataSet, minSupport=0.5):
     C1 = createC1(dataSet)
     D = map(set, dataSet)
     L1, supportData = scanD(D, C1, minSupport)
@@ -123,7 +125,10 @@ def apriori(dataSet, minSupport = 0.5):
 def calcConf(freqSet, H, supportData, br1, minConf=0.7):
     prunedH = []
     for conseq in H:
-        conf = supportData[freqSet]/supportData[freqSet-conseq]
+        if freqSet - conseq == frozenset(['1207', '1002', '1005', '1000']):
+            print 'yyyyyyy'
+            print freqSet, conseq
+        conf = supportData[freqSet] / supportData[freqSet-conseq]
         if conf >= minConf:
             # print freqSet-conseq, '-->', conseq, 'conf:', conf
             br1.append((freqSet-conseq, conseq, conf))
@@ -179,20 +184,46 @@ def writeToRedis(dbname, freqItemList, rules):
 
 
 if __name__ == '__main__':
-    minSupport = 0.6
-    minConf = 0.7
-    # dataSet = loadDataSet()
-    filename = sys.argv[1]
+
+    optparser = OptionParser()
+    optparser.add_option('-f', '--inputFile',
+                        dest='input',
+                        default=None)
+    optparser.add_option('-s', '--minSupport',
+                        dest='minS',
+                        default=0,
+                        type='float')
+    optparser.add_option('-c', '--minConfidence',
+                        dest='minC',
+                        default=0,
+                        type='float')
+    (options, args) = optparser.parse_args()
+    filename = options.input
+    minSupport = options.minS
+    minConf = options.minC
     dataSet = getPoj(filename)
+
     freqSetList, supportData = apriori(dataSet, minSupport)
+
+    ret = []
     print '------------------freqItem---------------------'
     for tran in freqSetList:
         for item in tran:
+            ret.append((item, supportData[item]))
             print item
+    ret.sort(key=lambda x: x[1], reverse=True)
+    fp = open('freq_20000_25000.data', 'w')
+    for item in ret:
+        fp.write(str(item) + '\n')
+    fp.close()
 
     rules = generateRules(freqSetList, supportData, minConf)
+
+    fp = open('rules_20000_25000.data', 'w')
     print '------------------rules---------------------'
     for rule in rules:
+        fp.write(str(rule) + '\n')
         print rule
-    getRecommend(['1000', '1002'], rules)
+
+    # getRecommend(['1000', '1002'], rules)
 
